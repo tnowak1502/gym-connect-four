@@ -17,7 +17,9 @@ from gym_connect_four.envs.render import render_board
 
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.algorithms import ppo
-
+from ray.rllib.algorithms.algorithm import Algorithm
+from ray.rllib.policy.policy import Policy
+import os
 
 class Player(ABC):
     """ Class used for evaluating the game """
@@ -194,13 +196,24 @@ class ConnectFourEnv(gym.Env):
         self.__window_width = window_width
         self.__window_height = window_height
         self.__rendered_board = self._update_board_render()
-        config = ppo.PPOConfig()
-        config = config.rollouts(num_rollout_workers=1)
+        print("loading algo in connect four")
         # Build the Algorithm instance using the config.
-        self.algorithm = config.build(env=ConnectFourEnv)
         # Restore the algo's state from the checkpoint.
-        self.algorithm.restore("C:/Users/thoma/Documents/Uni/Teamprojekt/rllib_checkpoint")
-
+        path = "C:/Users/thoma/Documents/Uni/Teamprojekt/rllib_checkpoint/"
+        subfolders = [f.path for f in os.scandir(path) if f.is_dir()]
+        #print(subfolders)
+        max_time = 0
+        newest_checkpoint = ""
+        for subfolder in subfolders:
+            #print(subfolder)
+            st_mtime = os.stat(subfolder).st_mtime
+            if st_mtime > max_time:
+                max_time = st_mtime
+                newest_checkpoint = subfolder
+        print("newest checkpoint:", str(newest_checkpoint))
+        self.policy = Policy.from_checkpoint(str(newest_checkpoint) +
+            "/policies/default_policy")
+        print("algo loaded")
     # def copy(self, board):
     #     newEnv = gym.make("ConnectFour-v0")
     #     newEnv.board = board
@@ -335,8 +348,9 @@ class ConnectFourEnv(gym.Env):
         #     if longestChain > bestValue:
         #         bestMove = action
         #         bestValue = longestChain
-
-        bestMove = self.algorithm.compute_single_action(self.__board.copy())
+        #print(policy)
+        bestMove = self.policy.compute_single_action(self.__board.copy())[0]
+        #print("bestMove", bestMove)
 
         board, step_result = self._step(bestMove, self.__board.copy())
         self.__board = board

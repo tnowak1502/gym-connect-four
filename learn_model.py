@@ -31,19 +31,38 @@ torch, nn = try_import_torch()
 from model import CustomModel
 from ray.rllib.algorithms import ppo
 from ray.rllib.algorithms.ppo import PPOConfig
+from ray.rllib.algorithms.algorithm import Algorithm
 
 ray.init()
-config = PPOConfig()
-
-config = config.rollouts(num_rollout_workers=1)
-
-# Build a Algorithm object from the config and run 1 training iteration.
-algo = config.build(env=ConnectFourEnv)
 
 for i in range(2):
-    print(algo.train())
+    #config = PPOConfig()
 
-checkpoint_dir = algo.save("C:/Users/thoma/Documents/Uni/Teamprojekt/rllib_checkpoint")
+    #config = config.rollouts(num_rollout_workers=1)
+
+    # Build a Algorithm object from the config and run 1 training iteration.
+    #algo = config.build(env=ConnectFourEnv)
+    path = "C:/Users/thoma/Documents/Uni/Teamprojekt/rllib_checkpoint/"
+    subfolders = [f.path for f in os.scandir(path) if f.is_dir()]
+    # print(subfolders)
+    max_time = 0
+    newest_checkpoint = ""
+    for subfolder in subfolders:
+        # print(subfolder)
+        st_mtime = os.stat(subfolder).st_mtime
+        if st_mtime > max_time:
+            max_time = st_mtime
+            newest_checkpoint = subfolder
+    print("newest checkpoint:", str(newest_checkpoint))
+    algo = Algorithm.from_checkpoint(newest_checkpoint)
+
+    train = algo.train()
+    while(train["sampler_results"]["episode_reward_mean"]<0.7):
+        train = algo.train()
+        print(train)
+    print("SAVING after iteration", i, "\n\n")
+    checkpoint_dir = algo.save("C:/Users/thoma/Documents/Uni/Teamprojekt/rllib_checkpoint")
+
 # class Arguments():
 #     # default values, previously set via cmd line parameters
 #     #
