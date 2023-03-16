@@ -10,10 +10,9 @@ import numpy as np
 import pygame
 from gym import error
 from gym import spaces
-from keras.engine.saving import load_model
+from tensorflow.keras.models import load_model
 
 from gym_connect_four.envs.render import render_board
-
 
 class Player(ABC):
     """ Class used for evaluating the game """
@@ -183,6 +182,11 @@ class ConnectFourEnv(gym.Env):
         self.__window_width = window_width
         self.__window_height = window_height
         self.__rendered_board = self._update_board_render()
+
+    def copy(self, board):
+        newEnv = gym.make("ConnectFour-v0")
+        newEnv.board = board
+        return newEnv
 
     def run(self, player1: Player, player2: Player, board: Optional[np.ndarray] = None, render=False) -> ResultType:
         player1.reset()
