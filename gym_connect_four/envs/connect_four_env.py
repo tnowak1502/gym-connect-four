@@ -5,14 +5,15 @@ from enum import Enum, unique
 from operator import itemgetter
 from typing import Tuple, NamedTuple, Hashable, Optional
 
-import gym
+import gymnasium as gym
 import numpy as np
 import pygame
-from gym import error
-from gym import spaces
+from gymnasium import error
+from gymnasium import spaces
 from tensorflow.keras.models import load_model
 
 from gym_connect_four.envs.render import render_board
+#from greedy import GreedyPlayer
 
 class Player(ABC):
     """ Class used for evaluating the game """
@@ -104,6 +105,7 @@ class ResultType(Enum):
     DRAW = 0
     WIN1 = 1
     WIN2 = -1
+    INVALID = -2
 
     def __eq__(self, other):
         """
@@ -146,13 +148,16 @@ class ConnectFourEnv(gym.Env):
     DEF_REWARD = 0
     DRAW_REWARD = 0.5
     WIN_REWARD = 1
+    INVALID_REWARD = 0
 
     class StepResult(NamedTuple):
 
         res_type: ResultType
 
         def get_reward(self, player: int):
-            if self.res_type is ResultType.NONE:
+            if self.res_type is ResultType.INVALID:
+                return ConnectFourEnv.INVALID_REWARD
+            elif self.res_type is ResultType.NONE:
                 return ConnectFourEnv.DEF_REWARD
             elif self.res_type is ResultType.DRAW:
                 return ConnectFourEnv.DRAW_REWARD
@@ -161,18 +166,21 @@ class ConnectFourEnv(gym.Env):
                     self.res_type.value * player]
 
         def is_done(self):
-            return self.res_type != ResultType.NONE
+            return self.res_type != ResultType.NONE and self.res_type != ResultType.INVALID
 
     def __init__(self, board_shape=(6, 7), window_width=512, window_height=512):
+        #print("WINDOW WIDTH", window_width)
+        #print("BOARD SHAPE", str(board_shape))
         super(ConnectFourEnv, self).__init__()
 
-        self.board_shape = board_shape
+        self.board_shape = (6, 7)
+        #print("BOARD SHAPE", self.board_shape)
 
         self.observation_space = spaces.Box(low=-1,
                                             high=1,
-                                            shape=board_shape,
+                                            shape=self.board_shape,
                                             dtype=int)
-        self.action_space = spaces.Discrete(board_shape[1])
+        self.action_space = spaces.Discrete(self.board_shape[1])
 
         self.__current_player = 1
         self.__board = np.zeros(self.board_shape, dtype=int)
@@ -229,33 +237,126 @@ class ConnectFourEnv(gym.Env):
         return step_result.res_type
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
-        step_result = self._step(action)
+        #print("Agent step", self.__current_player)
+        board, step_result = self._step(action, self.__board.copy())
+        self.__board = board
+        #print(step_result.is_done())
+        if step_result.res_type is ResultType.INVALID:
+            #print("INVALID MOVE!!!!!!!!!!!!!!!!!!!!!")
+            reward = step_result.get_reward(self.__current_player)
+            return self.__board.copy(), reward, False, {}
+        if step_result.is_done():
+            #print(self.is_win_state(self.__board), step_result.is_done(), self.__current_player)
+            reward = step_result.get_reward(self.__current_player)
+            self.__board = board
+            #print(self.__board)
+            #self.render()
+            #self._update_board_render()
+            return self.__board.copy(), reward, True, {}
+        self.__current_player *= -1
+        #print("Greedy Step", self.__current_player)
+        bestMove = 0
+        bestValue = 0
+        for action in range(self.board_shape[1]):
+            if not self.is_valid_action(action):
+                continue
+            test_board = self.__board.copy()
+            test_board, step_result = self._step(action, self.__board.copy())
+            longestChain = 0
+            if step_result.is_done():
+                bestMove = action
+                break
+            for i in range(test_board.shape[0]):
+                current_chain = 0
+                for j in range(test_board.shape[1]):
+                    if test_board[i][j] == 1:
+                        current_chain += 1
+                    elif test_board[i][j] == 0:
+                        if current_chain > longestChain:
+                            longestChain = current_chain
+                        current_chain = 0
+                    else:
+                        current_chain = 0
+            # check columns
+            trans_board = np.transpose(test_board)
+            for i in range(test_board.shape[1]):
+                current_chain = 0
+                for j in range(test_board.shape[0]):
+                    if trans_board[i][j] == 1:
+                        current_chain += 1
+                    elif trans_board[i][j] == 0:
+                        if current_chain > longestChain:
+                            longestChain = current_chain
+                        current_chain = 0
+                    else:
+                        current_chain = 0
+            # check diagonals
+            for i in range(test_board.shape[0]):
+                current_chain = 0
+                for j in range(test_board.shape[1]):
+                    while i < test_board.shape[0] and j < test_board.shape[1]:
+                        if test_board[i][j] == 1:
+                            current_chain += 1
+                        elif test_board[i][j] == 0:
+                            if current_chain > longestChain:
+                                longestChain = current_chain
+                            current_chain = 0
+                        else:
+                            current_chain = 0
+                        i += 1
+                        j += 1
+            # check reversed diagonals
+            flipped_board = np.fliplr(test_board)
+            for i in range(test_board.shape[0]):
+                current_chain = 0
+                for j in range(test_board.shape[1]):
+                    while i < test_board.shape[0] and j < test_board.shape[1]:
+                        if flipped_board[i][j] == 1:
+                            current_chain += 1
+                        elif flipped_board[i][j] == 0:
+                            if current_chain > longestChain:
+                                longestChain = current_chain
+                            current_chain = 0
+                        else:
+                            current_chain = 0
+                        i += 1
+                        j += 1
+            if longestChain > bestValue:
+                bestMove = action
+                bestValue = longestChain
+
+        board, step_result = self._step(bestMove, self.__board.copy())
+        self.__board = board
+        #print(self.is_win_state(self.__board), step_result.is_done(), self.__current_player)
+        self.__current_player *= -1
         reward = step_result.get_reward(self.__current_player)
         done = step_result.is_done()
+        #self.render()
+        #self._update_board_render()
+        #print(self.__board)
         return self.__board.copy(), reward, done, {}
 
-    def _step(self, action: int) -> StepResult:
+    def _step(self, action, board):
         result = ResultType.NONE
 
         if not self.is_valid_action(action):
-            raise Exception(
-                'Unable to determine a valid move! Maybe invoke at the wrong time?'
-            )
+            result = ResultType.INVALID
+            return board, self.StepResult(result)
 
         # Check and perform action
         for index in list(reversed(range(self.board_shape[0]))):
-            if self.__board[index][action] == 0:
-                self.__board[index][action] = self.__current_player
+            if board[index][action] == 0:
+                board[index][action] = self.__current_player
                 break
 
         # Check if board is completely filled
-        if np.count_nonzero(self.__board[0]) == self.board_shape[1]:
+        if np.count_nonzero(board[0]) == self.board_shape[1]:
             result = ResultType.DRAW
         else:
             # Check win condition
-            if self.is_win_state():
+            if self.is_win_state(board):
                 result = ResultType.WIN1 if self.__current_player == 1 else ResultType.WIN2
-        return self.StepResult(result)
+        return board, self.StepResult(result)
 
     @property
     def board(self):
@@ -325,16 +426,16 @@ class ConnectFourEnv(gym.Env):
                             image_width=self.__window_width,
                             image_height=self.__window_height)
 
-    def is_win_state(self) -> bool:
+    def is_win_state(self, board) -> bool:
         # Test rows
         for i in range(self.board_shape[0]):
             for j in range(self.board_shape[1] - 3):
-                value = sum(self.__board[i][j:j + 4])
+                value = sum(board[i][j:j + 4])
                 if abs(value) == 4:
                     return True
 
         # Test columns on transpose array
-        reversed_board = [list(i) for i in zip(*self.__board)]
+        reversed_board = [list(i) for i in zip(*board)]
         for i in range(self.board_shape[1]):
             for j in range(self.board_shape[0] - 3):
                 value = sum(reversed_board[i][j:j + 4])
@@ -346,11 +447,11 @@ class ConnectFourEnv(gym.Env):
             for j in range(self.board_shape[1] - 3):
                 value = 0
                 for k in range(4):
-                    value += self.__board[i + k][j + k]
+                    value += board[i + k][j + k]
                     if abs(value) == 4:
                         return True
 
-        reversed_board = np.fliplr(self.__board)
+        reversed_board = np.fliplr(board)
         # Test reverse diagonal
         for i in range(self.board_shape[0] - 3):
             for j in range(self.board_shape[1] - 3):
@@ -362,6 +463,5 @@ class ConnectFourEnv(gym.Env):
 
         return False
 
-    def available_moves(self) -> frozenset:
-        return frozenset(
-            (i for i in range(self.board_shape[1]) if self.is_valid_action(i)))
+    def available_moves(self):
+        return (i for i in range(self.board_shape[1]) if self.is_valid_action(i))

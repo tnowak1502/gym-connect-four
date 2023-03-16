@@ -1,7 +1,7 @@
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
-from gym_connect_four.envs.connect_four_env import ConnectFourEnv, Player, ResultType, SavedPlayer, RandomPlayer
+from gym_connect_four.connect_four_env import ConnectFourEnv, Player, ResultType, SavedPlayer, RandomPlayer
 
 class GreedyPlayer(Player):
     def __init__(self, env, name='GreedyPlayer'):
