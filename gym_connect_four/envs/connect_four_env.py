@@ -15,6 +15,10 @@ from tensorflow.keras.models import load_model
 from gym_connect_four.envs.render import render_board
 #from greedy import GreedyPlayer
 
+from ray.rllib.algorithms.ppo import PPOConfig
+from ray.rllib.algorithms import ppo
+
+
 class Player(ABC):
     """ Class used for evaluating the game """
 
@@ -190,11 +194,17 @@ class ConnectFourEnv(gym.Env):
         self.__window_width = window_width
         self.__window_height = window_height
         self.__rendered_board = self._update_board_render()
+        config = ppo.PPOConfig()
+        config = config.rollouts(num_rollout_workers=1)
+        # Build the Algorithm instance using the config.
+        self.algorithm = config.build(env=ConnectFourEnv)
+        # Restore the algo's state from the checkpoint.
+        self.algorithm.restore("C:/Users/thoma/Documents/Uni/Teamprojekt/rllib_checkpoint")
 
-    def copy(self, board):
-        newEnv = gym.make("ConnectFour-v0")
-        newEnv.board = board
-        return newEnv
+    # def copy(self, board):
+    #     newEnv = gym.make("ConnectFour-v0")
+    #     newEnv.board = board
+    #     return newEnv
 
     def run(self, player1: Player, player2: Player, board: Optional[np.ndarray] = None, render=False) -> ResultType:
         player1.reset()
@@ -236,7 +246,7 @@ class ConnectFourEnv(gym.Env):
 
         return step_result.res_type
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, dict]:
         #print("Agent step", self.__current_player)
         board, step_result = self._step(action, self.__board.copy())
         self.__board = board
@@ -244,7 +254,7 @@ class ConnectFourEnv(gym.Env):
         if step_result.res_type is ResultType.INVALID:
             #print("INVALID MOVE!!!!!!!!!!!!!!!!!!!!!")
             reward = step_result.get_reward(self.__current_player)
-            return self.__board.copy(), reward, False, {}
+            return self.__board.copy(), reward, False, False, {}
         if step_result.is_done():
             #print(self.is_win_state(self.__board), step_result.is_done(), self.__current_player)
             reward = step_result.get_reward(self.__current_player)
@@ -252,78 +262,81 @@ class ConnectFourEnv(gym.Env):
             #print(self.__board)
             #self.render()
             #self._update_board_render()
-            return self.__board.copy(), reward, True, {}
+            return self.__board.copy(), reward, True, False, {}
         self.__current_player *= -1
+
         #print("Greedy Step", self.__current_player)
-        bestMove = 0
-        bestValue = 0
-        for action in range(self.board_shape[1]):
-            if not self.is_valid_action(action):
-                continue
-            test_board = self.__board.copy()
-            test_board, step_result = self._step(action, self.__board.copy())
-            longestChain = 0
-            if step_result.is_done():
-                bestMove = action
-                break
-            for i in range(test_board.shape[0]):
-                current_chain = 0
-                for j in range(test_board.shape[1]):
-                    if test_board[i][j] == 1:
-                        current_chain += 1
-                    elif test_board[i][j] == 0:
-                        if current_chain > longestChain:
-                            longestChain = current_chain
-                        current_chain = 0
-                    else:
-                        current_chain = 0
-            # check columns
-            trans_board = np.transpose(test_board)
-            for i in range(test_board.shape[1]):
-                current_chain = 0
-                for j in range(test_board.shape[0]):
-                    if trans_board[i][j] == 1:
-                        current_chain += 1
-                    elif trans_board[i][j] == 0:
-                        if current_chain > longestChain:
-                            longestChain = current_chain
-                        current_chain = 0
-                    else:
-                        current_chain = 0
-            # check diagonals
-            for i in range(test_board.shape[0]):
-                current_chain = 0
-                for j in range(test_board.shape[1]):
-                    while i < test_board.shape[0] and j < test_board.shape[1]:
-                        if test_board[i][j] == 1:
-                            current_chain += 1
-                        elif test_board[i][j] == 0:
-                            if current_chain > longestChain:
-                                longestChain = current_chain
-                            current_chain = 0
-                        else:
-                            current_chain = 0
-                        i += 1
-                        j += 1
-            # check reversed diagonals
-            flipped_board = np.fliplr(test_board)
-            for i in range(test_board.shape[0]):
-                current_chain = 0
-                for j in range(test_board.shape[1]):
-                    while i < test_board.shape[0] and j < test_board.shape[1]:
-                        if flipped_board[i][j] == 1:
-                            current_chain += 1
-                        elif flipped_board[i][j] == 0:
-                            if current_chain > longestChain:
-                                longestChain = current_chain
-                            current_chain = 0
-                        else:
-                            current_chain = 0
-                        i += 1
-                        j += 1
-            if longestChain > bestValue:
-                bestMove = action
-                bestValue = longestChain
+        # bestMove = 0
+        # bestValue = 0
+        # for action in range(self.board_shape[1]):
+        #     if not self.is_valid_action(action):
+        #         continue
+        #     test_board = self.__board.copy()
+        #     test_board, step_result = self._step(action, self.__board.copy())
+        #     longestChain = 0
+        #     if step_result.is_done():
+        #         bestMove = action
+        #         break
+        #     for i in range(test_board.shape[0]):
+        #         current_chain = 0
+        #         for j in range(test_board.shape[1]):
+        #             if test_board[i][j] == 1:
+        #                 current_chain += 1
+        #             elif test_board[i][j] == 0:
+        #                 if current_chain > longestChain:
+        #                     longestChain = current_chain
+        #                 current_chain = 0
+        #             else:
+        #                 current_chain = 0
+        #     # check columns
+        #     trans_board = np.transpose(test_board)
+        #     for i in range(test_board.shape[1]):
+        #         current_chain = 0
+        #         for j in range(test_board.shape[0]):
+        #             if trans_board[i][j] == 1:
+        #                 current_chain += 1
+        #             elif trans_board[i][j] == 0:
+        #                 if current_chain > longestChain:
+        #                     longestChain = current_chain
+        #                 current_chain = 0
+        #             else:
+        #                 current_chain = 0
+        #     # check diagonals
+        #     for i in range(test_board.shape[0]):
+        #         current_chain = 0
+        #         for j in range(test_board.shape[1]):
+        #             while i < test_board.shape[0] and j < test_board.shape[1]:
+        #                 if test_board[i][j] == 1:
+        #                     current_chain += 1
+        #                 elif test_board[i][j] == 0:
+        #                     if current_chain > longestChain:
+        #                         longestChain = current_chain
+        #                     current_chain = 0
+        #                 else:
+        #                     current_chain = 0
+        #                 i += 1
+        #                 j += 1
+        #     # check reversed diagonals
+        #     flipped_board = np.fliplr(test_board)
+        #     for i in range(test_board.shape[0]):
+        #         current_chain = 0
+        #         for j in range(test_board.shape[1]):
+        #             while i < test_board.shape[0] and j < test_board.shape[1]:
+        #                 if flipped_board[i][j] == 1:
+        #                     current_chain += 1
+        #                 elif flipped_board[i][j] == 0:
+        #                     if current_chain > longestChain:
+        #                         longestChain = current_chain
+        #                     current_chain = 0
+        #                 else:
+        #                     current_chain = 0
+        #                 i += 1
+        #                 j += 1
+        #     if longestChain > bestValue:
+        #         bestMove = action
+        #         bestValue = longestChain
+
+        bestMove = self.algorithm.compute_single_action(self.__board.copy())
 
         board, step_result = self._step(bestMove, self.__board.copy())
         self.__board = board
@@ -334,7 +347,7 @@ class ConnectFourEnv(gym.Env):
         #self.render()
         #self._update_board_render()
         #print(self.__board)
-        return self.__board.copy(), reward, done, {}
+        return self.__board.copy(), reward, done, False, {}
 
     def _step(self, action, board):
         result = ResultType.NONE
@@ -362,14 +375,14 @@ class ConnectFourEnv(gym.Env):
     def board(self):
         return self.__board.copy()
 
-    def reset(self, board: Optional[np.ndarray] = None) -> np.ndarray:
+    def reset(self, board: Optional[np.ndarray] = None, seed=None, options=None) -> (np.ndarray, dict):
         self.__current_player = 1
         if board is None:
             self.__board = np.zeros(self.board_shape, dtype=int)
         else:
             self.__board = board
         self.__rendered_board = self._update_board_render()
-        return self.board
+        return self.board, {}
 
     def render(self, mode: str = 'console', close: bool = False) -> None:
         if mode == 'console':

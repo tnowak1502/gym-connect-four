@@ -40,11 +40,10 @@ config = config.rollouts(num_rollout_workers=1)
 # Build a Algorithm object from the config and run 1 training iteration.
 algo = config.build(env=ConnectFourEnv)
 
-for i in range(10):
+for i in range(2):
     print(algo.train())
 
-
-
+checkpoint_dir = algo.save("C:/Users/thoma/Documents/Uni/Teamprojekt/rllib_checkpoint")
 # class Arguments():
 #     # default values, previously set via cmd line parameters
 #     #
@@ -58,14 +57,14 @@ for i in range(10):
 #         self.as_test = True
 #         self.stop_iters = 50
 #         self.stop_timesteps = 100000
-#         self.stop_reward = 200
+#         self.stop_reward = 1
 #         # set to false in order to enable result logging
-#         self.no_tune = True
+#         self.no_tune = False
 #         self.local_mode = True
 #         # custom option added to utilize GPUs (if available, not working yet)
 #         self.use_gpus = 0
 #         # set variable to turn visualization on/off
-#         self.render = True
+#         self.render = False
 #
 # args = Arguments()
 #
@@ -125,38 +124,18 @@ for i in range(10):
 #         "episode_reward_mean": args.stop_reward,
 #     }
 #
-#     if args.no_tune:
-#         # manual training with train loop using PPO and fixed learning rate
-#         if args.run != "PPO":
-#             raise ValueError("Only support --run PPO with --no-tune.")
-#         print("Running manual train loop without Ray Tune.")
-#         # use fixed learning rate instead of grid search (needs tune)
-#         config.lr = 1e-3
-#         algo = config.build()
-#         # run manual training loop and print results after each iteration
-#         for _ in range(args.stop_iters):
-#             result = algo.train()
-#             print(pretty_print(result))
-#             # stop training of the target train steps or reward are reached
-#             if (
-#                     result["timesteps_total"] >= args.stop_timesteps
-#                     or result["episode_reward_mean"] >= args.stop_reward
-#             ):
-#                 break
-#         algo.stop()
-#     else:
-#         # automated run with Tune and grid search and TensorBoard
-#         print("Training automatically with Ray Tune")
-#         tuner = tune.Tuner(
-#             args.run,
-#             param_space=config.to_dict(),
-#             run_config=air.RunConfig(stop=stop, local_dir="./results", name="test_experiment"),
-#         )
-#         results = tuner.fit()
+#     # automated run with Tune and grid search and TensorBoard
+#     print("Training automatically with Ray Tune")
+#     tuner = tune.Tuner(
+#         args.run,
+#         param_space=config.to_dict(),
+#         run_config=air.RunConfig(stop=stop, local_dir="./results", name="test_experiment"),
+#     )
+#     results = tuner.fit()
 #
-#         if args.as_test:
-#             print("Checking if learning goals were achieved")
-#             check_learning_achieved(results, args.stop_reward)
+#     if args.as_test:
+#         print("Checking if learning goals were achieved")
+#         check_learning_achieved(results, args.stop_reward)
 #
 #     ray.shutdown()
 #
