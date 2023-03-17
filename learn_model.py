@@ -35,16 +35,28 @@ from ray.rllib.algorithms.algorithm import Algorithm
 
 ray.init()
 
-for i in range(2):
-    #config = PPOConfig()
+for i in range(3):
 
-    #config = config.rollouts(num_rollout_workers=1)
+    config = PPOConfig()
+    config = config.rollouts(num_rollout_workers=1)
 
-    # Build a Algorithm object from the config and run 1 training iteration.
-    #algo = config.build(env=ConnectFourEnv)
-    path = "C:/Users/thoma/Documents/Uni/Teamprojekt/rllib_checkpoint/"
+    path = "checkpoints/"
     subfolders = [f.path for f in os.scandir(path) if f.is_dir()]
-    # print(subfolders)
+
+    if len(subfolders) <= 0:
+        config = config.environment(ConnectFourEnv, env_config={"human_play": False, "greedy_train": True})
+        algo = config.build()
+        print("training against greedy")
+        train = algo.train()
+        print(train)
+        while (train["sampler_results"]["episode_reward_mean"] < 0.9):
+            train = algo.train()
+            print(train)
+        print("Saving greedy-beating checkpoint")
+        checkpoint_dir = algo.save("checkpoints/")
+        continue
+        # print(subfolders)
+
     max_time = 0
     newest_checkpoint = ""
     for subfolder in subfolders:
@@ -54,14 +66,18 @@ for i in range(2):
             max_time = st_mtime
             newest_checkpoint = subfolder
     print("newest checkpoint:", str(newest_checkpoint))
-    algo = Algorithm.from_checkpoint(newest_checkpoint)
 
+    config = config.environment(ConnectFourEnv, env_config={"human_play": False, "greedy_train": False})
+    # Build a Algorithm object from the config and run 1 training iteration.
+    algo = config.build()
+    algo.restore(newest_checkpoint)
     train = algo.train()
-    while(train["sampler_results"]["episode_reward_mean"]<0.7):
+    print(train)
+    while(train["sampler_results"]["episode_reward_mean"]<0.9):
         train = algo.train()
         print(train)
-    print("SAVING after iteration", i, "\n\n")
-    checkpoint_dir = algo.save("C:/Users/thoma/Documents/Uni/Teamprojekt/rllib_checkpoint")
+    print("Saving after iteration", i)
+    checkpoint_dir = algo.save("checkpoints/")
 
 # class Arguments():
 #     # default values, previously set via cmd line parameters
