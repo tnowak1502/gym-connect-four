@@ -40,6 +40,8 @@ for i in range(3):
     config = PPOConfig()
     config = config.rollouts(num_rollout_workers=1)
 
+    if not os.path.exists("checkpoints/"):
+        os.makedirs("checkpoints/")
     path = "checkpoints/"
     subfolders = [f.path for f in os.scandir(path) if f.is_dir()]
 
